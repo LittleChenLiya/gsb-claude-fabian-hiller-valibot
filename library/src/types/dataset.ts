@@ -52,6 +52,10 @@ export interface PartialDataset<TValue, TIssue extends BaseIssue<unknown>> {
    * The dataset issues.
    */
   issues: [TIssue, ...TIssue[]];
+  /**
+   * Whether the issues are incomplete because parsing was aborted early.
+   */
+  incomplete?: true;
 }
 
 /**
@@ -70,6 +74,10 @@ export interface FailureDataset<TIssue extends BaseIssue<unknown>> {
    * The dataset issues.
    */
   issues: [TIssue, ...TIssue[]];
+  /**
+   * Whether the issues are incomplete because parsing was aborted early.
+   */
+  incomplete?: true;
 }
 
 /**

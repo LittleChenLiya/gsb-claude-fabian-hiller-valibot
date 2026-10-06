@@ -205,6 +205,39 @@ describe('array', () => {
         typed: false,
         value: ['foo'],
         issues: [{ ...stringIssue, abortEarly: true }],
+        incomplete: true,
+      } satisfies FailureDataset<InferIssue<typeof schema>>);
+    });
+
+    test('with abort early on last item', async () => {
+      expect(
+        await schema['~run'](
+          { value: ['foo', 'bar', 123] },
+          { abortEarly: true }
+        )
+      ).toStrictEqual({
+        typed: false,
+        value: ['foo', 'bar'],
+        issues: [
+          {
+            ...baseInfo,
+            kind: 'schema',
+            type: 'string',
+            input: 123,
+            expected: 'string',
+            received: '123',
+            abortEarly: true,
+            path: [
+              {
+                type: 'array',
+                origin: 'value',
+                input: ['foo', 'bar', 123],
+                key: 2,
+                value: 123,
+              },
+            ],
+          },
+        ],
       } satisfies FailureDataset<InferIssue<typeof schema>>);
     });
 

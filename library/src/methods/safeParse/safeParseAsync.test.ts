@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { minLength, transform } from '../../actions/index.ts';
-import { objectAsync, string } from '../../schemas/index.ts';
+import { arrayAsync, objectAsync, string } from '../../schemas/index.ts';
 import { pipe } from '../pipe/index.ts';
 import { safeParseAsync } from './safeParseAsync.ts';
 
@@ -93,5 +93,29 @@ describe('safeParseAsync', () => {
         },
       ],
     });
+  });
+});
+
+describe('should mark incomplete issues on early abort', () => {
+  test('with abort early', async () => {
+    const schema = arrayAsync(pipe(string(), minLength(5)));
+    const result = await safeParseAsync(schema, ['foo', 'bar', 'baz'], {
+      abortEarly: true,
+    });
+    expect(result.typed).toBe(false);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues.length).toBe(1);
+      expect(result.incomplete).toBe(true);
+      expect(result.issues[0].path).toStrictEqual([
+        {
+          type: 'array',
+          origin: 'value',
+          input: ['foo', 'bar', 'baz'],
+          key: 0,
+          value: 'foo',
+        },
+      ]);
+    }
   });
 });

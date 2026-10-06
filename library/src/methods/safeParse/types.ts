@@ -37,10 +37,18 @@ export type SafeParseResult<
       readonly success: false;
       readonly output: InferOutput<TSchema>;
       readonly issues: [InferIssue<TSchema>, ...InferIssue<TSchema>[]];
+      /**
+       * Whether the issues are incomplete because parsing was aborted early.
+       */
+      readonly incomplete?: true;
     }
   | {
       readonly typed: false;
       readonly success: false;
       readonly output: unknown;
       readonly issues: [InferIssue<TSchema>, ...InferIssue<TSchema>[]];
+      /**
+       * Whether the issues are incomplete because parsing was aborted early.
+       */
+      readonly incomplete?: true;
     };

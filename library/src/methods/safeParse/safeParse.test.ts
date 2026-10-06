@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest';
-import { minLength, transform } from '../../actions/index.ts';
-import { object, string } from '../../schemas/index.ts';
+import { describe, expect, test, vi } from 'vitest';
+import { check, minLength, transform } from '../../actions/index.ts';
+import { array, object, string } from '../../schemas/index.ts';
 import { pipe } from '../pipe/index.ts';
 import { safeParse } from './safeParse.ts';
 
@@ -89,5 +89,53 @@ describe('safeParse', () => {
         },
       ],
     });
+  });
+});
+
+describe('should mark incomplete issues on early abort', () => {
+  const input = ['foo', 'bar', 'baz'];
+
+  test('with abort early', () => {
+    const requirement = vi.fn(() => false);
+    const schema = array(pipe(string(), check(requirement)));
+    const result = safeParse(schema, input, { abortEarly: true });
+    expect(result.typed).toBe(false);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues.length).toBe(1);
+      expect(result.incomplete).toBe(true);
+      expect(result.issues[0].path).toStrictEqual([
+        {
+          type: 'array',
+          origin: 'value',
+          input,
+          key: 0,
+          value: 'foo',
+        },
+      ]);
+    }
+    expect(requirement).toHaveBeenCalledTimes(1);
+  });
+
+  test('without abort early', () => {
+    const requirement = vi.fn(() => false);
+    const schema = array(pipe(string(), check(requirement)));
+    const result = safeParse(schema, input);
+    expect(result.typed).toBe(true);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.issues.length).toBe(3);
+      expect(result.incomplete).toBeUndefined();
+      expect(result.issues[1].path).toStrictEqual([
+        {
+          type: 'array',
+          origin: 'value',
+          input,
+          key: 1,
+          value: 'bar',
+        },
+      ]);
+    }
+    expect(requirement).toHaveBeenCalledTimes(3);
   });
 });

@@ -146,6 +146,11 @@ export function arrayAsync(
             // If necessary, abort early
             if (config.abortEarly) {
               dataset.typed = false;
+              // If not all items were processed, mark issues as incomplete
+              if (key < itemDatasets.length - 1) {
+                // @ts-expect-error
+                dataset.incomplete = true;
+              }
               break;
             }
           }
