@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { minLength, transform } from '../../actions/index.ts';
-import { objectAsync, string } from '../../schemas/index.ts';
+import { arrayAsync, number, objectAsync, string } from '../../schemas/index.ts';
 import { pipe } from '../pipe/index.ts';
 import { safeParseAsync } from './safeParseAsync.ts';
 
@@ -22,6 +22,7 @@ describe('safeParseAsync', () => {
       success: true,
       output: { key: 6 },
       issues: undefined,
+      complete: true,
     });
   });
 
@@ -58,6 +59,7 @@ describe('safeParseAsync', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 
@@ -92,6 +94,40 @@ describe('safeParseAsync', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
+    });
+  });
+});
+
+describe('completeness receipt for early abort', () => {
+  test('should return single incomplete issue for issue limit of 1', async () => {
+    const result = await safeParseAsync(
+      arrayAsync(number()),
+      ['foo', 'bar', 'baz'],
+      { abortEarly: true }
+    );
+    expect(result.typed).toBe(false);
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(false);
+    expect(result.issues?.length).toBe(1);
+    expect(result.issues?.[0].path?.[0]).toMatchObject({
+      type: 'array',
+      key: 0,
+    });
+  });
+
+  test('should return all issues with array index paths by default', async () => {
+    const result = await safeParseAsync(arrayAsync(number()), [
+      'foo',
+      'bar',
+      'baz',
+    ]);
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(true);
+    expect(result.issues?.length).toBe(3);
+    expect(result.issues?.[1].path?.[0]).toMatchObject({
+      type: 'array',
+      key: 1,
     });
   });
 });

@@ -30,5 +30,6 @@ export function safeParse<
     success: !dataset.issues,
     output: dataset.value,
     issues: dataset.issues,
+    complete: !dataset.incomplete,
   } as SafeParseResult<TSchema>;
 }

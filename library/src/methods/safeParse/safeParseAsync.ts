@@ -36,5 +36,6 @@ export async function safeParseAsync<
     success: !dataset.issues,
     output: dataset.value,
     issues: dataset.issues,
+    complete: !dataset.incomplete,
   } as SafeParseResult<TSchema>;
 }

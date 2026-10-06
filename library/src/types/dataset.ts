@@ -16,6 +16,11 @@ export interface UnknownDataset {
    * The dataset issues.
    */
   issues?: undefined;
+  /**
+   * Whether the dataset is incomplete because the validation was aborted
+   * early before all nested values were checked.
+   */
+  incomplete?: undefined;
 }
 
 /**
@@ -34,6 +39,11 @@ export interface SuccessDataset<TValue> {
    * The dataset issues.
    */
   issues?: undefined;
+  /**
+   * Whether the dataset is incomplete because the validation was aborted
+   * early before all nested values were checked.
+   */
+  incomplete?: undefined;
 }
 
 /**
@@ -52,6 +62,11 @@ export interface PartialDataset<TValue, TIssue extends BaseIssue<unknown>> {
    * The dataset issues.
    */
   issues: [TIssue, ...TIssue[]];
+  /**
+   * Whether the dataset is incomplete because the validation was aborted
+   * early before all nested values were checked.
+   */
+  incomplete?: boolean | undefined;
 }
 
 /**
@@ -70,6 +85,11 @@ export interface FailureDataset<TIssue extends BaseIssue<unknown>> {
    * The dataset issues.
    */
   issues: [TIssue, ...TIssue[]];
+  /**
+   * Whether the dataset is incomplete because the validation was aborted
+   * early before all nested values were checked.
+   */
+  incomplete?: boolean | undefined;
 }
 
 /**

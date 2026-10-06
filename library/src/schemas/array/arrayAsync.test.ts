@@ -205,6 +205,7 @@ describe('array', () => {
         typed: false,
         value: ['foo'],
         issues: [{ ...stringIssue, abortEarly: true }],
+        incomplete: true,
       } satisfies FailureDataset<InferIssue<typeof schema>>);
     });
 

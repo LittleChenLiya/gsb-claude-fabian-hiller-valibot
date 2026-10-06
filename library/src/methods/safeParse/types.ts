@@ -31,16 +31,31 @@ export type SafeParseResult<
        * The issues, if any.
        */
       readonly issues: undefined;
+      /**
+       * Whether the validation was exhaustive and not aborted early before
+       * all nested values were checked.
+       */
+      readonly complete: true;
     }
   | {
       readonly typed: true;
       readonly success: false;
       readonly output: InferOutput<TSchema>;
       readonly issues: [InferIssue<TSchema>, ...InferIssue<TSchema>[]];
+      /**
+       * Whether the validation was exhaustive and not aborted early before
+       * all nested values were checked.
+       */
+      readonly complete: boolean;
     }
   | {
       readonly typed: false;
       readonly success: false;
       readonly output: unknown;
       readonly issues: [InferIssue<TSchema>, ...InferIssue<TSchema>[]];
+      /**
+       * Whether the validation was exhaustive and not aborted early before
+       * all nested values were checked.
+       */
+      readonly complete: boolean;
     };

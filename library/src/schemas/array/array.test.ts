@@ -193,7 +193,67 @@ describe('array', () => {
         typed: false,
         value: ['foo'],
         issues: [{ ...stringIssue, abortEarly: true }],
+        incomplete: true,
       } satisfies FailureDataset<InferIssue<typeof schema>>);
+    });
+
+    test('with abort early on last item', () => {
+      expect(
+        schema['~run']({ value: ['foo', 'bar', 123] }, { abortEarly: true })
+      ).toStrictEqual({
+        typed: false,
+        value: ['foo', 'bar'],
+        issues: [
+          {
+            ...stringIssue,
+            abortEarly: true,
+            input: 123,
+            received: '123',
+            path: [
+              {
+                type: 'array',
+                origin: 'value',
+                input: ['foo', 'bar', 123],
+                key: 2,
+                value: 123,
+              },
+            ],
+          },
+        ],
+      } satisfies FailureDataset<InferIssue<typeof schema>>);
+    });
+
+    test('with abort early in nested array', () => {
+      const nestedSchema = array(schema);
+      expect(
+        nestedSchema['~run']({ value: [[123, 'foo']] }, { abortEarly: true })
+      ).toStrictEqual({
+        typed: false,
+        value: [],
+        issues: [
+          {
+            ...stringIssue,
+            abortEarly: true,
+            path: [
+              {
+                type: 'array',
+                origin: 'value',
+                input: [[123, 'foo']],
+                key: 0,
+                value: [123, 'foo'],
+              },
+              {
+                type: 'array',
+                origin: 'value',
+                input: [123, 'foo'],
+                key: 0,
+                value: 123,
+              },
+            ],
+          },
+        ],
+        incomplete: true,
+      } satisfies FailureDataset<InferIssue<typeof nestedSchema>>);
     });
 
     test('for wrong nested items', () => {

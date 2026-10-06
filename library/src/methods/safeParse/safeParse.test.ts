@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { minLength, transform } from '../../actions/index.ts';
-import { object, string } from '../../schemas/index.ts';
+import { check, minLength, transform } from '../../actions/index.ts';
+import { array, number, object, string } from '../../schemas/index.ts';
+import { ValiError } from '../../utils/index.ts';
+import { parse } from '../parse/index.ts';
 import { pipe } from '../pipe/index.ts';
 import { safeParse } from './safeParse.ts';
 
@@ -22,6 +24,7 @@ describe('safeParse', () => {
       success: true,
       output: { key: 6 },
       issues: undefined,
+      complete: true,
     });
   });
 
@@ -56,6 +59,7 @@ describe('safeParse', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 
@@ -88,6 +92,92 @@ describe('safeParse', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
+  });
+});
+
+describe('completeness receipt for early abort', () => {
+  const schema = array(number());
+  const input = ['foo', 'bar', 'baz'];
+
+  test('should return single incomplete issue for issue limit of 1', () => {
+    const result = safeParse(schema, input, { abortEarly: true });
+    expect(result.typed).toBe(false);
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(false);
+    expect(result.issues?.length).toBe(1);
+    expect(result.issues?.[0].path?.[0]).toMatchObject({
+      type: 'array',
+      key: 0,
+    });
+  });
+
+  test('should return all issues with array index paths by default', () => {
+    const result = safeParse(schema, input);
+    expect(result.typed).toBe(false);
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(true);
+    expect(result.issues?.length).toBe(3);
+    expect(result.issues?.[1].path?.[0]).toMatchObject({
+      type: 'array',
+      key: 1,
+    });
+  });
+
+  test('should throw all issues with normal parse', () => {
+    try {
+      parse(schema, input);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValiError);
+      expect((error as ValiError<typeof schema>).issues.length).toBe(3);
+      expect(
+        (error as ValiError<typeof schema>).issues[1].path?.[0]
+      ).toMatchObject({ type: 'array', key: 1 });
+    }
+  });
+
+  test('should not mark result as incomplete if last item aborts', () => {
+    const result = safeParse(schema, [1, 2, 'foo'], { abortEarly: true });
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(true);
+    expect(result.issues?.length).toBe(1);
+  });
+
+  test('should run custom action only once per checked item', () => {
+    let count = 0;
+    const actionSchema = array(
+      pipe(
+        number(),
+        check((input) => {
+          count++;
+          return input > 0;
+        })
+      )
+    );
+    const result = safeParse(actionSchema, [1, 2, 3], { abortEarly: true });
+    expect(result.success).toBe(true);
+    expect(result.complete).toBe(true);
+    expect(count).toBe(3);
+  });
+
+  test('should not rerun custom action of unchecked items', () => {
+    let count = 0;
+    const actionSchema = array(
+      pipe(
+        number(),
+        check((input) => {
+          count++;
+          return input > 0;
+        })
+      )
+    );
+    const result = safeParse(actionSchema, [1, 'foo', 3], {
+      abortEarly: true,
+    });
+    expect(result.success).toBe(false);
+    expect(result.complete).toBe(false);
+    expect(count).toBe(1);
   });
 });

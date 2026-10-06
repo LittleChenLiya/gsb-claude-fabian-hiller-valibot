@@ -52,6 +52,7 @@ describe('safeParser', () => {
       success: true,
       output: { key: 6 },
       issues: undefined,
+      complete: true,
     });
   });
 
@@ -86,6 +87,7 @@ describe('safeParser', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 
@@ -118,6 +120,7 @@ describe('safeParser', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 });

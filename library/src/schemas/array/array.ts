@@ -127,9 +127,21 @@ export function array(
               dataset.issues = itemDataset.issues;
             }
 
+            // If item dataset is incomplete, mark dataset as incomplete
+            if (itemDataset.incomplete) {
+              // @ts-expect-error
+              dataset.incomplete = true;
+            }
+
             // If necessary, abort early
             if (config.abortEarly) {
               dataset.typed = false;
+
+              // If not all items were checked, mark dataset as incomplete
+              if (key < input.length - 1) {
+                // @ts-expect-error
+                dataset.incomplete = true;
+              }
               break;
             }
           }

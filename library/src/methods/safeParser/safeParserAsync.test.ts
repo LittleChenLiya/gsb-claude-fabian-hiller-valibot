@@ -52,6 +52,7 @@ describe('safeParserAsync', () => {
       success: true,
       output: { key: 6 },
       issues: undefined,
+      complete: true,
     });
   });
 
@@ -90,6 +91,7 @@ describe('safeParserAsync', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 
@@ -124,6 +126,7 @@ describe('safeParserAsync', () => {
           abortPipeEarly: undefined,
         },
       ],
+      complete: true,
     });
   });
 });
