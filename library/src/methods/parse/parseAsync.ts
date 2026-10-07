@@ -7,7 +7,7 @@ import type {
   InferIssue,
   InferOutput,
 } from '../../types/index.ts';
-import { ValiError } from '../../utils/index.ts';
+import { ValiError, _finalizeOrigins } from '../../utils/index.ts';
 
 /**
  * Parses an unknown input based on a schema.
@@ -31,6 +31,7 @@ export async function parseAsync<
     { value: input },
     getGlobalConfig(config)
   );
+  _finalizeOrigins(dataset);
   if (dataset.issues) {
     throw new ValiError(dataset.issues);
   }

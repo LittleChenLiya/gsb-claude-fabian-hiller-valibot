@@ -1,4 +1,5 @@
 import type { BaseTransformation, SuccessDataset } from '../../types/index.ts';
+import { _followTransform } from '../../utils/index.ts';
 
 /**
  * Transform action interface.
@@ -37,8 +38,11 @@ export function transform<TInput, TOutput>(
     async: false,
     operation,
     '~run'(dataset) {
+      const previousValue = dataset.value;
       // @ts-expect-error
       dataset.value = this.operation(dataset.value);
+      // Let origin metadata follow the transformed value
+      _followTransform(dataset, previousValue);
       // @ts-expect-error
       return dataset as SuccessDataset<TOutput>;
     },

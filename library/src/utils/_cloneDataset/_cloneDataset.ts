@@ -1,4 +1,5 @@
 import type { BaseIssue, OutputDataset } from '../../types/index.ts';
+import { ORIGIN_SYMBOL, ORIGINS_SYMBOL } from '../_optionalOrigin/index.ts';
 
 /**
  * Creates a shallow copy of a dataset.
@@ -18,7 +19,7 @@ export function _cloneDataset<TValue, TIssue extends BaseIssue<unknown>>(
 ): OutputDataset<TValue, TIssue> {
   // Hint: We assign the known dataset properties directly instead of using the
   // spread operator for better runtime performance.
-  return {
+  const copy: OutputDataset<TValue, TIssue> = {
     typed: dataset.typed,
     value: dataset.value,
     // Hint: Parent schemas and the `forward` method add path items to the
@@ -31,4 +32,28 @@ export function _cloneDataset<TValue, TIssue extends BaseIssue<unknown>>(
       path: issue.path && [...issue.path],
     })),
   };
+
+  // Preserve optional origin metadata attached to the dataset wrapper (e.g.
+  // when an optional entry is wrapped in `cache`)
+  const originSource = dataset as unknown as Record<symbol, unknown>;
+  const origin = originSource[ORIGIN_SYMBOL];
+  if (origin !== undefined) {
+    Object.defineProperty(copy, ORIGIN_SYMBOL, {
+      value: origin,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+  }
+  const origins = originSource[ORIGINS_SYMBOL];
+  if (origins !== undefined) {
+    Object.defineProperty(copy, ORIGINS_SYMBOL, {
+      value: origins,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  return copy;
 }

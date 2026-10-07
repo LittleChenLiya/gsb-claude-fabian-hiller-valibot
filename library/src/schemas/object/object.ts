@@ -10,7 +10,17 @@ import type {
   ObjectPathItem,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _attachEntryOrigin,
+  _attachOrigins,
+  _bubbleOrigins,
+  _collectOrigins,
+  _createEntryDataset,
+  _standardSchema,
+  ORIGINS_SYMBOL,
+  type OptionalOrigin,
+} from '../../utils/index.ts';
 import type { ObjectIssue } from './types.ts';
 
 /**
@@ -97,6 +107,9 @@ export function object(
       // Get input value from dataset
       const input = dataset.value;
 
+      // Origins of optional entries keyed by their dot path
+      let origins: Record<string, OptionalOrigin> | undefined;
+
       // If root type is valid, check nested types
       if (input && typeof input === 'object') {
         // Set typed to `true` and value to blank object
@@ -123,7 +136,37 @@ export function object(
               ? // @ts-expect-error
                 input[key]
               : getDefault(valueSchema);
-            const valueDataset = valueSchema['~run']({ value }, config);
+
+            // Only optional-like entries consume the origin metadata
+            const tracksOrigin =
+              valueSchema.type === 'exact_optional' ||
+              valueSchema.type === 'optional' ||
+              valueSchema.type === 'nullish';
+            const valueDataset = valueSchema['~run'](
+              _createEntryDataset(value, isKeyPresent, tracksOrigin),
+              config
+            );
+
+            // Collect origins of this entry and of its nested entries
+            if (tracksOrigin) {
+              _attachEntryOrigin(valueDataset);
+              (origins ??= {});
+              _collectOrigins(origins!, key, valueDataset);
+            } else {
+              // Plain entries can still carry origins of nested optional
+              // fields, so bubble them up to this object's origins map
+              if (
+                valueDataset.value &&
+                (typeof valueDataset.value === 'object' ||
+                  typeof valueDataset.value === 'function') &&
+                (valueDataset.value as Record<symbol, unknown>)[
+                  ORIGINS_SYMBOL
+                ]
+              ) {
+                (origins ??= {});
+                _bubbleOrigins(origins!, key, valueDataset);
+              }
+            }
 
             // If there are issues, capture them
             if (valueDataset.issues) {
@@ -205,6 +248,12 @@ export function object(
         // Otherwise, add object issue
       } else {
         _addIssue(this, 'type', dataset, config);
+      }
+
+      // Attach the collected optional origins to the output object without
+      // adding them as regular user entries
+      if (origins) {
+        _attachOrigins(dataset.value as object, origins);
       }
 
       // Return output dataset

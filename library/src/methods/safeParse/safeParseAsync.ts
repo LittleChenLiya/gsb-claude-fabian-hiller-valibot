@@ -6,6 +6,7 @@ import type {
   Config,
   InferIssue,
 } from '../../types/index.ts';
+import { _finalizeOrigins } from '../../utils/index.ts';
 import type { SafeParseResult } from './types.ts';
 
 /**
@@ -31,6 +32,7 @@ export async function safeParseAsync<
     { value: input },
     getGlobalConfig(config)
   );
+  _finalizeOrigins(dataset);
   return {
     typed: dataset.typed,
     success: !dataset.issues,

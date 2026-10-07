@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest';
+import { transform } from '../../actions/transform/index.ts';
+import { pipe } from '../../methods/pipe/index.ts';
+import { safeParse } from '../../methods/safeParse/index.ts';
+import { getOrigins } from '../../utils/index.ts';
 import { expectNoSchemaIssue, expectSchemaIssue } from '../../vitest/index.ts';
+import { object } from '../object/index.ts';
 import {
   string,
   type StringIssue,
@@ -127,6 +132,46 @@ describe('optional', () => {
         typed: true,
         value: 'foo',
       });
+    });
+  });
+
+  describe('should track the default origin through the existing data flow', () => {
+    // Short regression example for the original `safeParse` interface: the
+    // origin metadata follows the default value and its transform, but it is
+    // not written into the user object.
+    const schema = object({
+      name: pipe(
+        optional(string(), 'anon'),
+        transform((value) => value.length)
+      ),
+    });
+
+    test('for missing key', () => {
+      const result = safeParse(schema, {});
+      expect(result).toMatchObject({
+        typed: true,
+        success: true,
+        issues: undefined,
+      });
+      expect(result.output).toStrictEqual({ name: 4 });
+      expect(getOrigins(result.output)).toStrictEqual({ name: 'missing' });
+    });
+
+    test('for explicit undefined', () => {
+      const result = safeParse(schema, { name: undefined });
+      expect(result.output).toStrictEqual({ name: 4 });
+      expect(getOrigins(result.output)).toStrictEqual({
+        name: 'undefined',
+      });
+    });
+
+    test('for regular value and for null', () => {
+      expect(getOrigins(safeParse(schema, { name: 'abc' }).output)).toStrictEqual({
+        name: 'value',
+      });
+      const nullResult = safeParse(schema, { name: null });
+      expect(nullResult.success).toBe(false);
+      expect(getOrigins(nullResult.output)).toStrictEqual({ name: 'value' });
     });
   });
 });

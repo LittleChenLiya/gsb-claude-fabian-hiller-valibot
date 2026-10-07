@@ -5,6 +5,7 @@ import type {
   Config,
   InferIssue,
 } from '../../types/index.ts';
+import { _finalizeOrigins } from '../../utils/index.ts';
 import type { SafeParseResult } from './types.ts';
 
 /**
@@ -25,6 +26,7 @@ export function safeParse<
   config?: Config<InferIssue<TSchema>>
 ): SafeParseResult<TSchema> {
   const dataset = schema['~run']({ value: input }, getGlobalConfig(config));
+  _finalizeOrigins(dataset);
   return {
     typed: dataset.typed,
     success: !dataset.issues,

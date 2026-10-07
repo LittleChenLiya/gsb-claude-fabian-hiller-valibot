@@ -10,7 +10,17 @@ import type {
   ObjectPathItem,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _attachEntryOrigin,
+  _attachOrigins,
+  _bubbleOrigins,
+  _collectOrigins,
+  _createEntryDataset,
+  _standardSchema,
+  ORIGINS_SYMBOL,
+  type OptionalOrigin,
+} from '../../utils/index.ts';
 import type { object } from './object.ts';
 import type { ObjectIssue } from './types.ts';
 
@@ -101,6 +111,9 @@ export function objectAsync(
       // Get input value from dataset
       const input = dataset.value;
 
+      // Origins of optional entries keyed by their dot path
+      let origins: Record<string, OptionalOrigin> | undefined;
+
       // If root type is valid, check nested types
       if (input && typeof input === 'object') {
         // Set typed to `true` and value to blank object
@@ -125,11 +138,20 @@ export function objectAsync(
                 ? // @ts-expect-error
                   input[key]
                 : await getDefault(valueSchema);
+
+              // Only optional-like entries consume the origin metadata
+              const tracksOrigin =
+                valueSchema.type === 'exact_optional' ||
+                valueSchema.type === 'optional' ||
+                valueSchema.type === 'nullish';
               return [
                 key,
                 value,
                 valueSchema,
-                await valueSchema['~run']({ value }, config),
+                await valueSchema['~run'](
+                  _createEntryDataset(value, isKeyPresent, tracksOrigin),
+                  config
+                ),
               ] as const;
             }
             return [
@@ -147,6 +169,26 @@ export function objectAsync(
           // If key is present or its an optional schema with a default value,
           // process its value dataset
           if (valueDataset) {
+            // Collect origins of optional-like entries and nested entries
+            if (
+              valueSchema.type === 'exact_optional' ||
+              valueSchema.type === 'optional' ||
+              valueSchema.type === 'nullish'
+            ) {
+              _attachEntryOrigin(valueDataset);
+              (origins ??= {});
+              _collectOrigins(origins!, key, valueDataset);
+            } else if (
+              valueDataset.value &&
+              (typeof valueDataset.value === 'object' ||
+                typeof valueDataset.value === 'function') &&
+              (valueDataset.value as Record<symbol, unknown>)[ORIGINS_SYMBOL]
+            ) {
+              // Plain entries can still carry origins of nested optional
+              // fields, so bubble them up to this object's origins map
+              (origins ??= {});
+              _bubbleOrigins(origins!, key, valueDataset);
+            }
             // If there are issues, capture them
             if (valueDataset.issues) {
               // Create object path item
@@ -226,6 +268,12 @@ export function objectAsync(
         // Otherwise, add object issue
       } else {
         _addIssue(this, 'type', dataset, config);
+      }
+
+      // Attach the collected optional origins to the output object without
+      // adding them as regular user entries
+      if (origins) {
+        _attachOrigins(dataset.value as object, origins);
       }
 
       // Return output dataset

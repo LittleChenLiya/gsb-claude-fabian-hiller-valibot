@@ -8,7 +8,7 @@ import type {
   InferIssue,
   SuccessDataset,
 } from '../../types/index.ts';
-import { _standardSchema } from '../../utils/index.ts';
+import { _getOrigin, _setOrigin, _standardSchema } from '../../utils/index.ts';
 import type { optional } from './optional.ts';
 import type { InferOptionalOutput } from './types.ts';
 
@@ -98,6 +98,13 @@ export function optionalAsync(
     wrapped,
     default: default_,
     async '~run'(dataset, config) {
+      // If no origin has been marked yet (standalone use), distinguish an
+      // explicit `undefined` input from a regular value. Note that `null` is
+      // never classified as missing: it is a regular value.
+      if (_getOrigin(dataset) === undefined) {
+        _setOrigin(dataset, dataset.value === undefined ? 'undefined' : 'value');
+      }
+
       // If value is `undefined`, override it with default or return dataset
       if (dataset.value === undefined) {
         // If default is specified, override value of dataset
