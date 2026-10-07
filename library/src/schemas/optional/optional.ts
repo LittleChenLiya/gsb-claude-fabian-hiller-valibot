@@ -7,7 +7,11 @@ import type {
   InferIssue,
   SuccessDataset,
 } from '../../types/index.ts';
-import { _standardSchema } from '../../utils/index.ts';
+import {
+  _addValueSource,
+  _standardSchema,
+  ValueSourceHint,
+} from '../../utils/index.ts';
 import type { InferOptionalOutput } from './types.ts';
 
 /**
@@ -81,6 +85,25 @@ export function optional(
     wrapped,
     default: default_,
     '~run'(dataset, config) {
+      // Record source of value before any default is applied. A missing key
+      // hint from the parent object schema takes precedence. An explicit
+      // `undefined` is distinguished from a normal value, and `null` is
+      // always treated as a normal value.
+      const isMissing =
+        ValueSourceHint in dataset && dataset[ValueSourceHint] === 'missing';
+      if (isMissing) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete dataset[ValueSourceHint];
+      }
+      _addValueSource(
+        dataset,
+        isMissing
+          ? 'missing'
+          : dataset.value === undefined
+            ? 'undefined'
+            : 'value'
+      );
+
       // If value is `undefined`, override it with default or return dataset
       if (dataset.value === undefined) {
         // If default is specified, override value of dataset

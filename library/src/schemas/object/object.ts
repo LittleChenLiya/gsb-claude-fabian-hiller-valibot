@@ -10,7 +10,13 @@ import type {
   ObjectPathItem,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _addValueSource,
+  _mergeValueSources,
+  _standardSchema,
+  ValueSourceHint,
+} from '../../utils/index.ts';
 import type { ObjectIssue } from './types.ts';
 
 /**
@@ -123,7 +129,16 @@ export function object(
               ? // @ts-expect-error
                 input[key]
               : getDefault(valueSchema);
-            const valueDataset = valueSchema['~run']({ value }, config);
+            const entryDataset = { value };
+            if (!isKeyPresent) {
+              // Hint: tell an `optional` schema that its key was missing
+              (entryDataset as Record<symbol, unknown>)[ValueSourceHint] =
+                'missing';
+            }
+            const valueDataset = valueSchema['~run'](entryDataset, config);
+
+            // Merge value source metadata of nested entries
+            _mergeValueSources(dataset, valueDataset, key);
 
             // If there are issues, capture them
             if (valueDataset.issues) {
@@ -173,6 +188,11 @@ export function object(
           } else if (valueSchema.fallback !== undefined) {
             // @ts-expect-error
             dataset.value[key] = getFallback(valueSchema);
+
+            // Otherwise, if key is missing and schema is optional without a
+            // default, record the source of the skipped value
+          } else if (valueSchema.type === 'optional') {
+            _addValueSource(dataset, 'missing', [key]);
 
             // Otherwise, if key is missing and required, add issue
           } else if (
