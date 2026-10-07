@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { fallback } from '../../methods/index.ts';
+import { transform } from '../../actions/index.ts';
+import { fallback, pipe } from '../../methods/index.ts';
 import type { FailureDataset, InferIssue } from '../../types/index.ts';
+import { getDotPath } from '../../utils/index.ts';
 import { expectNoSchemaIssue, expectSchemaIssue } from '../../vitest/index.ts';
 import { any } from '../any/index.ts';
 import { exactOptional } from '../exactOptional/index.ts';
@@ -54,6 +56,24 @@ describe('looseObject', () => {
         ...baseSchema,
         message,
       } satisfies LooseObjectSchema<Entries, typeof message>);
+    });
+
+    test('with unknown keys option', () => {
+      expect(looseObject(entries, { unknownKeys: 'strip' })).toStrictEqual({
+        ...baseSchema,
+        message: undefined,
+        unknownKeys: 'strip',
+      } satisfies LooseObjectSchema<Entries, undefined>);
+    });
+
+    test('with message and unknown keys option', () => {
+      expect(
+        looseObject(entries, 'message', { unknownKeys: 'reject' })
+      ).toStrictEqual({
+        ...baseSchema,
+        message: 'message',
+        unknownKeys: 'reject',
+      } satisfies LooseObjectSchema<Entries, 'message'>);
     });
   });
 
@@ -701,6 +721,86 @@ describe('looseObject', () => {
           },
         ],
       } satisfies FailureDataset<InferIssue<typeof schema>>);
+    });
+  });
+
+  describe('unknown keys pipeline option', () => {
+    const input = { key: 'foo', unknown1: 123, unknown2: null };
+
+    function createCountingEntry() {
+      let calls = 0;
+      const entry = pipe(
+        string(),
+        transform((value) => {
+          calls++;
+          return value.toUpperCase();
+        })
+      );
+      return { entry, getCalls: () => calls };
+    }
+
+    test('for explicit keep policy', () => {
+      const { entry, getCalls } = createCountingEntry();
+      const schema = looseObject({ key: entry }, { unknownKeys: 'keep' });
+      expect(schema['~run']({ value: input }, {})).toStrictEqual({
+        typed: true,
+        value: { key: 'FOO', unknown1: 123, unknown2: null },
+      });
+      expect(getCalls()).toBe(1);
+    });
+
+    test('for strip policy', () => {
+      const { entry, getCalls } = createCountingEntry();
+      const schema = looseObject({ key: entry }, { unknownKeys: 'strip' });
+      expect(schema['~run']({ value: input }, {})).toStrictEqual({
+        typed: true,
+        value: { key: 'FOO' },
+      });
+      expect(getCalls()).toBe(1);
+    });
+
+    test('for reject policy with zero transform calls', () => {
+      const { entry, getCalls } = createCountingEntry();
+      const schema = looseObject({ key: entry }, { unknownKeys: 'reject' });
+      const dataset = schema['~run']({ value: input }, {});
+      expect(dataset.typed).toBe(false);
+      expect(dataset.issues?.length).toBe(1);
+      expect(dataset.issues?.[0]).toMatchObject({
+        kind: 'schema',
+        type: 'loose_object',
+        input: 'unknown1',
+        expected: 'never',
+      });
+      expect(dataset.issues?.[0] && getDotPath(dataset.issues[0])).toBe(
+        'unknown1'
+      );
+      expect(getCalls()).toBe(0);
+    });
+
+    test('for nested reject policy error path', () => {
+      const inner = createCountingEntry();
+      const outer = createCountingEntry();
+      const schema = looseObject({
+        name: outer.entry,
+        nested: looseObject({ key: inner.entry }, { unknownKeys: 'reject' }),
+      });
+      const dataset = schema['~run'](
+        { value: { name: 'foo', nested: { key: 'bar', extra: true } } },
+        {}
+      );
+      expect(dataset.typed).toBe(false);
+      expect(dataset.issues?.length).toBe(1);
+      expect(dataset.issues?.[0]).toMatchObject({
+        kind: 'schema',
+        type: 'loose_object',
+        input: 'extra',
+        expected: 'never',
+      });
+      expect(dataset.issues?.[0] && getDotPath(dataset.issues[0])).toBe(
+        'nested.extra'
+      );
+      expect(outer.getCalls()).toBe(1);
+      expect(inner.getCalls()).toBe(0);
     });
   });
 });

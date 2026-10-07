@@ -9,8 +9,14 @@ import type {
   ObjectEntries,
   ObjectPathItem,
   OutputDataset,
+  UnknownKeysOptions,
+  UnknownKeysPolicy,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _isValidObjectKey,
+  _standardSchema,
+} from '../../utils/index.ts';
 import type { ObjectIssue } from './types.ts';
 
 /**
@@ -44,8 +50,17 @@ export interface ObjectSchema<
    * The error message.
    */
   readonly message: TMessage;
+  /**
+   * The unknown keys policy.
+   */
+  readonly unknownKeys?: UnknownKeysPolicy | undefined;
 }
 
+/* eslint-disable @typescript-eslint/unified-signatures --
+ * The overloads are intentionally kept separate so that the
+ * error message and the unknown keys options can be provided
+ * independently of each other.
+ */
 /**
  * Creates an object schema.
  *
@@ -80,11 +95,65 @@ export function object<
   const TMessage extends ErrorMessage<ObjectIssue> | undefined,
 >(entries: TEntries, message: TMessage): ObjectSchema<TEntries, TMessage>;
 
+/**
+ * Creates an object schema.
+ *
+ * Hint: This schema removes unknown entries by default. With the
+ * `unknownKeys` option you can explicitly decide the pipeline order: the
+ * policy (`'strip'`, `'keep'` or `'reject'`) is applied to unknown keys
+ * before the known entries (and their transformations) are executed. With
+ * `'reject'`, transformations with side effects are never executed if an
+ * unknown key is present.
+ *
+ * @param entries The entries schema.
+ * @param options The unknown keys options.
+ *
+ * @returns An object schema.
+ */
+export function object<const TEntries extends ObjectEntries>(
+  entries: TEntries,
+  options: UnknownKeysOptions
+): ObjectSchema<TEntries, undefined>;
+
+/**
+ * Creates an object schema.
+ *
+ * Hint: This schema removes unknown entries by default. With the
+ * `unknownKeys` option you can explicitly decide the pipeline order: the
+ * policy (`'strip'`, `'keep'` or `'reject'`) is applied to unknown keys
+ * before the known entries (and their transformations) are executed. With
+ * `'reject'`, transformations with side effects are never executed if an
+ * unknown key is present.
+ *
+ * @param entries The entries schema.
+ * @param message The error message.
+ * @param options The unknown keys options.
+ *
+ * @returns An object schema.
+ */
+export function object<
+  const TEntries extends ObjectEntries,
+  const TMessage extends ErrorMessage<ObjectIssue> | undefined,
+>(
+  entries: TEntries,
+  message: TMessage,
+  options: UnknownKeysOptions
+): ObjectSchema<TEntries, TMessage>;
+
+/* eslint-enable @typescript-eslint/unified-signatures */
+
 // @__NO_SIDE_EFFECTS__
 export function object(
   entries: ObjectEntries,
-  message?: ErrorMessage<ObjectIssue>
+  arg2?: ErrorMessage<ObjectIssue> | UnknownKeysOptions,
+  arg3?: UnknownKeysOptions
 ): ObjectSchema<ObjectEntries, ErrorMessage<ObjectIssue> | undefined> {
+  // Distinguish between message and options argument
+  const [message, options] =
+    typeof arg2 === 'object' && arg2 !== null
+      ? [undefined, arg2]
+      : [arg2, arg3];
+
   return _standardSchema({
     kind: 'schema',
     type: 'object',
@@ -93,6 +162,11 @@ export function object(
     async: false,
     entries,
     message,
+    // Hint: The `unknownKeys` property is only added if the option is
+    // explicitly specified to keep the default schema object unchanged.
+    ...(options?.unknownKeys
+      ? { unknownKeys: options.unknownKeys }
+      : undefined),
     '~run'(dataset, config) {
       // Get input value from dataset
       const input = dataset.value;
@@ -104,7 +178,49 @@ export function object(
         dataset.typed = true;
         dataset.value = {};
 
-        // Process each object entry of schema
+        // Get unknown keys policy (defaults to `'strip'`)
+        const unknownKeys = this.unknownKeys ?? 'strip';
+
+        // Pipeline step 1: If policy is `'reject'`, decide on unknown keys
+        // before any known entry is parsed. Hint: We return early so that
+        // transformations with side effects are never executed when an
+        // unknown key is present.
+        if (unknownKeys === 'reject') {
+          for (const key in input) {
+            if (!Object.prototype.hasOwnProperty.call(this.entries, key)) {
+              _addIssue(this, 'key', dataset, config, {
+                input: key,
+                expected: 'never',
+                path: [
+                  {
+                    type: 'object',
+                    origin: 'key',
+                    input: input as Record<string, unknown>,
+                    key,
+                    // @ts-expect-error
+                    value: input[key],
+                  },
+                ],
+              });
+
+              // Hint: We intentionally break the loop after the first unknown
+              // entry. Otherwise, attackers could send large objects to
+              // exhaust device resources.
+              break;
+            }
+          }
+
+          // If an unknown key was rejected, skip known entries entirely
+          if (dataset.issues) {
+            // @ts-expect-error
+            return dataset as OutputDataset<
+              InferObjectOutput<ObjectEntries>,
+              ObjectIssue | InferObjectIssue<ObjectEntries>
+            >;
+          }
+        }
+
+        // Pipeline step 2: Process each object entry of schema
         for (const key in this.entries) {
           const valueSchema = this.entries[key];
           const isKeyPresent = key in input;
@@ -198,6 +314,20 @@ export function object(
             // If necessary, abort early
             if (config.abortEarly) {
               break;
+            }
+          }
+        }
+
+        // Pipeline step 3: Add unknown keys to dataset if policy is `'keep'`
+        // Hint: We exclude specific keys for security reasons
+        if (unknownKeys === 'keep' && (!dataset.issues || !config.abortEarly)) {
+          for (const key in input) {
+            if (
+              _isValidObjectKey(input, key) &&
+              !Object.prototype.hasOwnProperty.call(this.entries, key)
+            ) {
+              // @ts-expect-error
+              dataset.value[key] = input[key];
             }
           }
         }

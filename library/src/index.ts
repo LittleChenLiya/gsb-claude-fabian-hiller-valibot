@@ -54,6 +54,8 @@ export type {
   TupleItems,
   TupleItemsAsync,
   UnknownDataset,
+  UnknownKeysOptions,
+  UnknownKeysPolicy,
   UnknownPathItem,
 } from './types/index.ts';
 export * from './utils/index.ts';

@@ -94,6 +94,32 @@ export interface ObjectEntriesAsync {
 }
 
 /**
+ * Unknown keys policy type.
+ *
+ * Hint: The policy is decided before the known entries are parsed. With
+ * `'reject'`, unknown keys immediately produce an issue and no known entry
+ * schema (and therefore no transformation with side effects) is executed.
+ */
+export type UnknownKeysPolicy = 'strip' | 'keep' | 'reject';
+
+/**
+ * Unknown keys options interface.
+ */
+export interface UnknownKeysOptions {
+  /**
+   * The policy for handling unknown keys.
+   *
+   * - `'strip'`: unknown keys are removed from the output (default of
+   *   `object`).
+   * - `'keep'`: unknown keys are kept in the output (default of
+   *   `looseObject`).
+   * - `'reject'`: unknown keys return an issue before any known entry is
+   *   parsed.
+   */
+  readonly unknownKeys?: UnknownKeysPolicy | undefined;
+}
+
+/**
  * Object keys type.
  */
 export type ObjectKeys<

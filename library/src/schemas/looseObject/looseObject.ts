@@ -9,6 +9,8 @@ import type {
   ObjectEntries,
   ObjectPathItem,
   OutputDataset,
+  UnknownKeysOptions,
+  UnknownKeysPolicy,
 } from '../../types/index.ts';
 import {
   _addIssue,
@@ -48,8 +50,17 @@ export interface LooseObjectSchema<
    * The error message.
    */
   readonly message: TMessage;
+  /**
+   * The unknown keys policy.
+   */
+  readonly unknownKeys?: UnknownKeysPolicy | undefined;
 }
 
+/* eslint-disable @typescript-eslint/unified-signatures --
+ * The overloads are intentionally kept separate so that the
+ * error message and the unknown keys options can be provided
+ * independently of each other.
+ */
 /**
  * Creates a loose object schema.
  *
@@ -74,14 +85,68 @@ export function looseObject<
   const TMessage extends ErrorMessage<LooseObjectIssue> | undefined,
 >(entries: TEntries, message: TMessage): LooseObjectSchema<TEntries, TMessage>;
 
+/**
+ * Creates a loose object schema.
+ *
+ * Hint: This schema keeps unknown entries by default. With the
+ * `unknownKeys` option you can explicitly decide the pipeline order: the
+ * policy (`'keep'`, `'strip'` or `'reject'`) is applied to unknown keys
+ * before the known entries (and their transformations) are executed. With
+ * `'reject'`, transformations with side effects are never executed if an
+ * unknown key is present.
+ *
+ * @param entries The entries schema.
+ * @param options The unknown keys options.
+ *
+ * @returns A loose object schema.
+ */
+export function looseObject<const TEntries extends ObjectEntries>(
+  entries: TEntries,
+  options: UnknownKeysOptions
+): LooseObjectSchema<TEntries, undefined>;
+
+/**
+ * Creates a loose object schema.
+ *
+ * Hint: This schema keeps unknown entries by default. With the
+ * `unknownKeys` option you can explicitly decide the pipeline order: the
+ * policy (`'keep'`, `'strip'` or `'reject'`) is applied to unknown keys
+ * before the known entries (and their transformations) are executed. With
+ * `'reject'`, transformations with side effects are never executed if an
+ * unknown key is present.
+ *
+ * @param entries The entries schema.
+ * @param message The error message.
+ * @param options The unknown keys options.
+ *
+ * @returns A loose object schema.
+ */
+export function looseObject<
+  const TEntries extends ObjectEntries,
+  const TMessage extends ErrorMessage<LooseObjectIssue> | undefined,
+>(
+  entries: TEntries,
+  message: TMessage,
+  options: UnknownKeysOptions
+): LooseObjectSchema<TEntries, TMessage>;
+
+/* eslint-enable @typescript-eslint/unified-signatures */
+
 // @__NO_SIDE_EFFECTS__
 export function looseObject(
   entries: ObjectEntries,
-  message?: ErrorMessage<LooseObjectIssue>
+  arg2?: ErrorMessage<LooseObjectIssue> | UnknownKeysOptions,
+  arg3?: UnknownKeysOptions
 ): LooseObjectSchema<
   ObjectEntries,
   ErrorMessage<LooseObjectIssue> | undefined
 > {
+  // Distinguish between message and options argument
+  const [message, options] =
+    typeof arg2 === 'object' && arg2 !== null
+      ? [undefined, arg2]
+      : [arg2, arg3];
+
   return _standardSchema({
     kind: 'schema',
     type: 'loose_object',
@@ -90,6 +155,11 @@ export function looseObject(
     async: false,
     entries,
     message,
+    // Hint: The `unknownKeys` property is only added if the option is
+    // explicitly specified to keep the default schema object unchanged.
+    ...(options?.unknownKeys
+      ? { unknownKeys: options.unknownKeys }
+      : undefined),
     '~run'(dataset, config) {
       // Get input value from dataset
       const input = dataset.value;
@@ -101,7 +171,49 @@ export function looseObject(
         dataset.typed = true;
         dataset.value = {};
 
-        // Process each object entry of schema
+        // Get unknown keys policy (defaults to `'keep'`)
+        const unknownKeys = this.unknownKeys ?? 'keep';
+
+        // Pipeline step 1: If policy is `'reject'`, decide on unknown keys
+        // before any known entry is parsed. Hint: We return early so that
+        // transformations with side effects are never executed when an
+        // unknown key is present.
+        if (unknownKeys === 'reject') {
+          for (const key in input) {
+            if (!Object.prototype.hasOwnProperty.call(this.entries, key)) {
+              _addIssue(this, 'key', dataset, config, {
+                input: key,
+                expected: 'never',
+                path: [
+                  {
+                    type: 'object',
+                    origin: 'key',
+                    input: input as Record<string, unknown>,
+                    key,
+                    // @ts-expect-error
+                    value: input[key],
+                  },
+                ],
+              });
+
+              // Hint: We intentionally break the loop after the first unknown
+              // entry. Otherwise, attackers could send large objects to
+              // exhaust device resources.
+              break;
+            }
+          }
+
+          // If an unknown key was rejected, skip known entries entirely
+          if (dataset.issues) {
+            // @ts-expect-error
+            return dataset as OutputDataset<
+              InferObjectOutput<ObjectEntries> & { [key: string]: unknown },
+              LooseObjectIssue | InferObjectIssue<ObjectEntries>
+            >;
+          }
+        }
+
+        // Pipeline step 2: Process each object entry of schema
         for (const key in this.entries) {
           const valueSchema = this.entries[key];
           const isKeyPresent = key in input;
@@ -199,9 +311,12 @@ export function looseObject(
           }
         }
 
-        // Add rest to dataset if necessary
+        // Pipeline step 3: Add rest to dataset if policy is `'keep'`
         // Hint: We exclude specific keys for security reasons
-        if (!dataset.issues || !config.abortEarly) {
+        if (
+          unknownKeys === 'keep' &&
+          (!dataset.issues || !config.abortEarly)
+        ) {
           for (const key in input) {
             if (
               _isValidObjectKey(input, key) &&

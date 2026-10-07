@@ -15,5 +15,5 @@ export interface ObjectIssue extends BaseIssue<unknown> {
   /**
    * The expected property.
    */
-  readonly expected: 'Object' | `"${string}"`;
+  readonly expected: 'Object' | `"${string}"` | 'never';
 }
