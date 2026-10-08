@@ -6,6 +6,7 @@ export * from './_getCodePointCount/index.ts';
 export * from './_getGraphemeCount/index.ts';
 export * from './_getLastMetadata/index.ts';
 export * from './_getWordCount/index.ts';
+export * from './_handleUnknownKeys/index.ts';
 export * from './_isLuhnAlgo/index.ts';
 export * from './_isSameValueZero/index.ts';
 export * from './_isValidObjectKey/index.ts';

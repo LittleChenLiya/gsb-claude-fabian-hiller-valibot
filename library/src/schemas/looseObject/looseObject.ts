@@ -12,6 +12,7 @@ import type {
 } from '../../types/index.ts';
 import {
   _addIssue,
+  _handleUnknownKeys,
   _isValidObjectKey,
   _standardSchema,
 } from '../../utils/index.ts';
@@ -101,8 +102,25 @@ export function looseObject(
         dataset.typed = true;
         dataset.value = {};
 
+        // Handle unknown keys before processing known entries if configured
+        const skipEntries =
+          !!config.unknownKeys &&
+          _handleUnknownKeys(
+            this,
+            dataset,
+            config,
+            input,
+            this.entries,
+            config.unknownKeys
+          );
+
         // Process each object entry of schema
         for (const key in this.entries) {
+          // Hint: Known entries are skipped when unknown keys are rejected so
+          // that transformations with side effects are not executed
+          if (skipEntries) {
+            break;
+          }
           const valueSchema = this.entries[key];
           const isKeyPresent = key in input;
 
@@ -201,7 +219,7 @@ export function looseObject(
 
         // Add rest to dataset if necessary
         // Hint: We exclude specific keys for security reasons
-        if (!dataset.issues || !config.abortEarly) {
+        if (!config.unknownKeys && (!dataset.issues || !config.abortEarly)) {
           for (const key in input) {
             if (
               _isValidObjectKey(input, key) &&

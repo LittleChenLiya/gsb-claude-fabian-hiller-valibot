@@ -10,7 +10,11 @@ import type {
   ObjectPathItem,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _handleUnknownKeys,
+  _standardSchema,
+} from '../../utils/index.ts';
 import type { ObjectIssue } from './types.ts';
 
 /**
@@ -104,8 +108,25 @@ export function object(
         dataset.typed = true;
         dataset.value = {};
 
+        // Handle unknown keys before processing known entries if configured
+        const skipEntries =
+          !!config.unknownKeys &&
+          _handleUnknownKeys(
+            this,
+            dataset,
+            config,
+            input,
+            this.entries,
+            config.unknownKeys
+          );
+
         // Process each object entry of schema
         for (const key in this.entries) {
+          // Hint: Known entries are skipped when unknown keys are rejected so
+          // that transformations with side effects are not executed
+          if (skipEntries) {
+            break;
+          }
           const valueSchema = this.entries[key];
           const isKeyPresent = key in input;
 

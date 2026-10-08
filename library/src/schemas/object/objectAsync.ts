@@ -10,7 +10,11 @@ import type {
   ObjectPathItem,
   OutputDataset,
 } from '../../types/index.ts';
-import { _addIssue, _standardSchema } from '../../utils/index.ts';
+import {
+  _addIssue,
+  _handleUnknownKeys,
+  _standardSchema,
+} from '../../utils/index.ts';
 import type { object } from './object.ts';
 import type { ObjectIssue } from './types.ts';
 
@@ -108,39 +112,53 @@ export function objectAsync(
         dataset.typed = true;
         dataset.value = {};
 
+        // Handle unknown keys before processing known entries if configured
+        const skipEntries =
+          !!config.unknownKeys &&
+          _handleUnknownKeys(
+            this,
+            dataset,
+            config,
+            input,
+            this.entries,
+            config.unknownKeys
+          );
+
         // If key is present or its an optional schema with a default value,
         // parse input of key or default value asynchronously
-        const valueDatasets = await Promise.all(
-          Object.entries(this.entries).map(async ([key, valueSchema]) => {
-            const isKeyPresent = key in input;
-            if (
-              isKeyPresent ||
-              ((valueSchema.type === 'exact_optional' ||
-                valueSchema.type === 'optional' ||
-                valueSchema.type === 'nullish') &&
-                // @ts-expect-error
-                valueSchema.default !== undefined)
-            ) {
-              const value: unknown = isKeyPresent
-                ? // @ts-expect-error
-                  input[key]
-                : await getDefault(valueSchema);
-              return [
-                key,
-                value,
-                valueSchema,
-                await valueSchema['~run']({ value }, config),
-              ] as const;
-            }
-            return [
-              key,
-              // @ts-expect-error
-              input[key] as unknown,
-              valueSchema,
-              null,
-            ] as const;
-          })
-        );
+        const valueDatasets = skipEntries
+          ? []
+          : await Promise.all(
+              Object.entries(this.entries).map(async ([key, valueSchema]) => {
+                const isKeyPresent = key in input;
+                if (
+                  isKeyPresent ||
+                  ((valueSchema.type === 'exact_optional' ||
+                    valueSchema.type === 'optional' ||
+                    valueSchema.type === 'nullish') &&
+                    // @ts-expect-error
+                    valueSchema.default !== undefined)
+                ) {
+                  const value: unknown = isKeyPresent
+                    ? // @ts-expect-error
+                      input[key]
+                    : await getDefault(valueSchema);
+                  return [
+                    key,
+                    value,
+                    valueSchema,
+                    await valueSchema['~run']({ value }, config),
+                  ] as const;
+                }
+                return [
+                  key,
+                  // @ts-expect-error
+                  input[key] as unknown,
+                  valueSchema,
+                  null,
+                ] as const;
+              })
+            );
 
         // Process each object entry of schema
         for (const [key, value, valueSchema, valueDataset] of valueDatasets) {

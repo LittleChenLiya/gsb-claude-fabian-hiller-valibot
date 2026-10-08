@@ -13,12 +13,14 @@ describe('config', () => {
     message: undefined,
     abortEarly: undefined,
     abortPipeEarly: undefined,
+    unknownKeys: undefined,
   };
 
   const customConfig: GlobalConfig = {
     lang: 'en',
     abortEarly: true,
     abortPipeEarly: false,
+    unknownKeys: 'strip',
   };
 
   test('should be undefined initially', () => {
